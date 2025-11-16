@@ -1,4 +1,4 @@
-name: Build and Release Wheel
+name: "Build and Release: sageattention"
 
 on:
   workflow_dispatch:

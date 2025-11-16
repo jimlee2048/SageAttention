@@ -1,4 +1,4 @@
-name: Build and Pre-release SageAttention3
+name: "Build and Pre-release: sageattn3"
 
 on:
   workflow_dispatch:
