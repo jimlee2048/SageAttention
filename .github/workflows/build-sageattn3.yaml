@@ -93,7 +93,7 @@ jobs:
             echo "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/${{ matrix.cuda }}" >> $GITHUB_ENV
           fi
 
-          echo "TORCH_CUDA_ARCH_LIST=10.0,12.0" >> $GITHUB_ENV
+          echo "TORCH_CUDA_ARCH_LIST=10.0;12.0" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
