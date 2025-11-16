@@ -137,9 +137,9 @@ if not SKIP_CUDA_BUILD:
             num = "100a"
         elif capability.startswith("12.0"):
             num = "120a"
-        cc_flag.append([f"-gencode=arch=compute_{num},code=sm_{num}"])
+        cc_flag.append(f"-gencode=arch=compute_{num},code=sm_{num}")
         if capability.endswith("+PTX"):
-            cc_flag[-1].append(f"-gencode=arch=compute_{num},code=compute_{num}")
+            cc_flag.append(f"-gencode=arch=compute_{num},code=compute_{num}")
 
     # HACK: The compiler flag -D_GLIBCXX_USE_CXX11_ABI is set to be the same as
     # torch._C._GLIBCXX_USE_CXX11_ABI
