@@ -69,8 +69,8 @@ jobs:
       - name: Set environment variables
         id: set-env
         run: |
-          echo "Reading version from setup.py"
-          PACKAGE_VERSION=$(grep -E "^\s*version\s*=\s*['\"][^'\"]*['\"]" setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]*)['\"].*/\1/")
+          echo "Reading version from sageattention3_blackwell/setup.py"
+          PACKAGE_VERSION=$(grep -E "^\s*version\s*=\s*['\"][^'\"]*['\"]" sageattention3_blackwell/setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]*)['\"].*/\1/")
           echo "Package version: $PACKAGE_VERSION"
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
 
@@ -127,7 +127,7 @@ jobs:
         working-directory: sageattention3_blackwell/dist
         run: |
           for whl in *.whl; do
-            prefix="sageattention-${{ env.PACKAGE_VERSION }}"
+            prefix="sageattn3-${{ env.PACKAGE_VERSION }}"
             suffix="${whl#${prefix}-}"
             new_name="${prefix}+${{ matrix.cuda }}torch${{ matrix.torch }}-${suffix}"
 
@@ -151,7 +151,7 @@ jobs:
       - name: Get package version
         id: get-version
         run: |
-          PACKAGE_VERSION=$(grep -E "^\s*version\s*=\s*['\"][^'\"]*['\"]" setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]*)['\"].*/\1/")
+          PACKAGE_VERSION=$(grep -E "^\s*version\s*=\s*['\"][^'\"]*['\"]" sageattention3_blackwell/setup.py | sed -E "s/.*version\s*=\s*['\"]([^'\"]*)['\"].*/\1/")
           echo "Package version: $PACKAGE_VERSION"
           echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> $GITHUB_ENV
 
