@@ -1,9 +1,13 @@
-name: Build and Release Wheel
+name: "Build and Release: sageattention"
 
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
+      - ".github/workflows/build-sageattn2.yaml"
+      - "sageattention/**"
       - "pyproject.toml"
       - "setup.py"
 
@@ -55,7 +59,7 @@ jobs:
         id: cuda-toolkit
         with:
           cuda: ${{ fromJSON(env.CUDA_VERSION_MAP)[matrix.cuda] }}
-          log-file-suffix: torch${{ matrix.torch }}-${{ matrix.cuda }}-${{ env.PY_LIMITED_API_TAG }}-abi3
+          log-file-suffix: sageattention-torch${{ matrix.torch }}-${{ matrix.cuda }}-${{ env.PY_LIMITED_API_TAG }}-abi3
 
       - name: Check current PyTorch version
         id: check-torch-version
@@ -118,12 +122,15 @@ jobs:
             python -m pip install --no-cache-dir torch==${{ matrix.torch }}.* torchvision torchaudio triton>=3.0.0 --index-url ${{ env.PYTORCH_INDEX_URL }}
           fi
 
-          python -m pip install -U build ninja wheel setuptools
+          python -m pip install -U build ninja "setuptools>=62,<75" "wheel>=0.38,<0.44" "packaging>=21,<24"
 
       - name: Build wheel
+        env:
+          CUDA_PATH: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
         run: |
           export MAX_JOBS=2
-          CUDA_PATH=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
+          export EXT_PARALLEL=1
+          export CUDA_HOME=$CUDA_PATH
           export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LD_LIBRARY_PATH
           export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LIBRARY_PATH
           python -m build --wheel --no-isolation -C--build-option=--py-limited-api=${{ env.PY_LIMITED_API_TAG }}
@@ -147,7 +154,7 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-torch${{ matrix.torch }}-${{ matrix.cuda }}-${{ env.PY_LIMITED_API_TAG }}-abi3
+          name: sageattention-wheel-torch${{ matrix.torch }}-${{ matrix.cuda }}-${{ env.PY_LIMITED_API_TAG }}-abi3
           path: dist/*.whl
 
   create-release:
@@ -167,7 +174,8 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: wheels
+          path: sageattention-wheels
+          pattern: sageattention-wheel-*
           merge-multiple: true
 
       - name: Create Release
@@ -177,4 +185,4 @@ jobs:
           name: v${{ env.PACKAGE_VERSION }}
           draft: false
           prerelease: false
-          files: wheels/*.whl
+          files: sageattention-wheels/*.whl

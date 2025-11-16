@@ -55,7 +55,7 @@ if not SKIP_CUDA_BUILD:
         "-U__CUDA_NO_HALF_OPERATORS__",
         "-U__CUDA_NO_HALF_CONVERSIONS__",
         "--use_fast_math",
-        "--threads=8",
+        f"--threads={os.cpu_count()}",
         "-Xptxas=-v",
         "-diag-suppress=174",
     ]
