@@ -102,6 +102,7 @@ if not SKIP_CUDA_BUILD:
     _, bare_metal_version = get_cuda_bare_metal_version(CUDA_HOME)
     if bare_metal_version < Version("12.8"):
         raise RuntimeError("Sage3 is only supported on CUDA 12.8 and above")
+    
     compute_capabilities = []
     arch_list_env = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
     if arch_list_env:
@@ -113,14 +114,14 @@ if not SKIP_CUDA_BUILD:
     if not compute_capabilities:
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
             raise RuntimeError(
-                "Unable to detect a CUDA device. Set TORCH_CUDA_ARCH_LIST to target 10.0 or 12.0."
+                "Unable to detect a CUDA device, and no TORCH_CUDA_ARCH_LIST was set."
             )
         for i in range(torch.cuda.device_count()):
             major, minor = torch.cuda.get_device_capability(i)
             capability = f"{major}.{minor}"
             if capability not in SUPPORTED_ARCHS:
                 warnings.warn(
-                    f"skipping GPU {i} with compute capability {capability}; supported {SUPPORTED_ARCHS}"
+                    f"skipping GPU {i} with compute capability {capability}; supported: {SUPPORTED_ARCHS}"
                 )
                 continue
             if capability not in compute_capabilities:
@@ -128,24 +129,17 @@ if not SKIP_CUDA_BUILD:
 
     if not compute_capabilities:
         raise RuntimeError(
-            "No target compute capabilities. Set TORCH_CUDA_ARCH_LIST or build on a supported GPU (sm_100 or sm_120)."
+            "No target compute capabilities. Set TORCH_CUDA_ARCH_LIST or build on a supported GPU."
         )
 
     for capability in compute_capabilities:
         if capability.startswith("10.0"):
-            HAS_SM100 = True
             num = "100a"
         elif capability.startswith("12.0"):
-            HAS_SM120 = True
             num = "120a"
         cc_flag.append([f"-gencode=arch=compute_{num},code=sm_{num}"])
         if capability.endswith("+PTX"):
             cc_flag[-1].append(f"-gencode=arch=compute_{num},code=compute_{num}")
-        else:
-            warnings.warn(
-                f"Ignoring unsupported compute capability '{capability}'. Supported bases: {SUPPORTED_ARCHS}."
-            )
-            continue
 
     # HACK: The compiler flag -D_GLIBCXX_USE_CXX11_ABI is set to be the same as
     # torch._C._GLIBCXX_USE_CXX11_ABI
