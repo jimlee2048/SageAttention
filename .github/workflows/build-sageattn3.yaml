@@ -17,16 +17,12 @@ jobs:
       PYTHON_BUILDER_VERSION: "3.13"
       CUDA_VERSION_MAP: >-
         {
-          "cu128": "12.8.1",
           "cu129": "12.9.1",
           "cu130": "13.0.2"
         }
     strategy:
       matrix:
         include:
-          # torch2.7+cu128
-          - torch: "2.7"
-            cuda: "cu128"
           # torch2.8+cu129
           - torch: "2.8"
             cuda: "cu129"
