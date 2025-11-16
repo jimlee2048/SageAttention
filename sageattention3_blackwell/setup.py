@@ -1,4 +1,5 @@
 import warnings
+import re
 import os
 from pathlib import Path
 from packaging.version import parse, Version
@@ -22,48 +23,6 @@ FORCE_CXX11_ABI = os.getenv("FAHOPPER_FORCE_CXX11_ABI", "FALSE") == "TRUE"
 
 # Supported NVIDIA GPU architectures; keep in sync with workflows.
 SUPPORTED_ARCHS = {"10.0", "12.0"}
-
-
-def normalize_arch(arch: str):
-    """Normalize an architecture spec from TORCH_CUDA_ARCH_LIST."""
-
-    token = arch.strip()
-    if not token:
-        return None
-    cleaned = token.upper().replace("SM_", "").replace("COMPUTE_", "")
-    ptx = cleaned.endswith("+PTX")
-    if ptx:
-        cleaned = cleaned[:-4]
-    suffix = ""
-    if cleaned.endswith("A"):
-        suffix = "a"
-        cleaned = cleaned[:-1]
-    cleaned = cleaned.replace(" ", "")
-    if "." in cleaned:
-        major, _, minor = cleaned.partition(".")
-        if not (major.isdigit() and minor and minor[0].isdigit()):
-            warnings.warn(
-                f"Invalid CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-            )
-            return None
-        base = f"{int(major)}.{minor[0]}"
-    else:
-        if len(cleaned) != 2 or not cleaned.isdigit():
-            warnings.warn(
-                f"Invalid CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-            )
-            return None
-        base = f"{cleaned[0]}.{cleaned[1]}"
-    if base not in SUPPORTED_ARCHS:
-        warnings.warn(
-            f"Unsupported CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-        )
-        return None
-    capability = f"{base}{suffix}"
-    if ptx:
-        capability += "+PTX"
-    return capability
-
 
 def get_cuda_bare_metal_version(cuda_dir):
     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
@@ -103,13 +62,27 @@ if not SKIP_CUDA_BUILD:
     if bare_metal_version < Version("12.8"):
         raise RuntimeError("Sage3 is only supported on CUDA 12.8 and above")
     
-    compute_capabilities = []
-    arch_list_env = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
-    if arch_list_env:
-        for item in arch_list_env.replace(",", ";").split(";"):
-            capability = normalize_arch(item)
-            if capability is not None and capability not in compute_capabilities:
-                compute_capabilities.append(capability)
+    compute_capabilities = set()
+    # Prefer TORCH_CUDA_ARCH_LIST if explicitly specified (works without GPUs).
+    PARSE_CUDA_ARCH_RE = re.compile(
+        r"(?P<major>[0-9]+)\.(?P<minor>[0-9])(?P<suffix>[a-zA-Z]{0,1})(?P<ptx>\+PTX){0,1}"
+    )
+    arch_list_env = os.environ.get("TORCH_CUDA_ARCH_LIST")
+    if arch_list_env is not None:
+        # Parse the CUDA architecture list from the environment variable.
+        for arch in arch_list_env.replace(" ", ";").split(";"):
+            match = PARSE_CUDA_ARCH_RE.match(arch)
+            if match is None:
+                warnings.warn(f"Invalid CUDA architecture {arch}. Supported architectures: {SUPPORTED_ARCHS}.")
+                continue
+            major = match.group("major")
+            minor = match.group("minor")
+            suffix = match.group("suffix") or ""
+            ptx = match.group("ptx") or ""
+            if f"{major}.{minor}" not in SUPPORTED_ARCHS:
+                warnings.warn(f"Unsupported CUDA architecture {arch}. Supported architectures: {SUPPORTED_ARCHS}.")
+                continue
+            compute_capabilities.add(f"{major}.{minor}{suffix}{ptx}")
 
     if not compute_capabilities:
         if not torch.cuda.is_available() or torch.cuda.device_count() == 0:
@@ -125,21 +98,37 @@ if not SKIP_CUDA_BUILD:
                 )
                 continue
             if capability not in compute_capabilities:
-                compute_capabilities.append(capability)
+                compute_capabilities.add(capability)
 
     if not compute_capabilities:
         raise RuntimeError(
-            "No target compute capabilities. Set TORCH_CUDA_ARCH_LIST or build on a supported GPU."
+            "No target compute capabilities. Set TORCH_CUDA_ARCH_LIST or build on a machine with GPUs."
         )
+    else:
+        print(f"Target compute capabilities: {compute_capabilities}")
 
-    for capability in compute_capabilities:
-        if capability.startswith("10.0"):
-            num = "100a"
-        elif capability.startswith("12.0"):
-            num = "120a"
-        cc_flag.append(f"-gencode=arch=compute_{num},code=sm_{num}")
-        if capability.endswith("+PTX"):
-            cc_flag.append(f"-gencode=arch=compute_{num},code=compute_{num}")
+
+    def has_capability(target):
+            return any(cc.startswith(target) for cc in compute_capabilities)
+
+    def get_nvcc_flags(allowed_capabilities):
+        flags = []
+        # Add target compute capabilities to NVCC flags.
+        for capability in compute_capabilities:
+            if not any(capability.startswith(prefix) for prefix in allowed_capabilities):
+                continue
+            num = capability.split("+")[0].replace(".", "")
+            if num in {"100", "120"}:
+                num += "a"
+            flags += ["-gencode", f"arch=compute_{num},code=sm_{num}"]
+            if capability.endswith("+PTX"):
+                flags += ["-gencode", f"arch=compute_{num},code=compute_{num}"]
+        return flags
+
+    if has_capability(("10.0",)):
+        cc_flag += get_nvcc_flags(["10.0"])
+    if has_capability(("12.0",)):
+        cc_flag += get_nvcc_flags(["12.0"])
 
     # HACK: The compiler flag -D_GLIBCXX_USE_CXX11_ABI is set to be the same as
     # torch._C._GLIBCXX_USE_CXX11_ABI
