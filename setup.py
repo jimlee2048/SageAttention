@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import os
+import re
 import sys
 import subprocess
 import threading
@@ -49,14 +50,14 @@ if not SKIP_CUDA_BUILD:
 
     # Compiler flags.
     CXX_FLAGS = ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16"]
-    NVCC_FLAGS = [
+    NVCC_FLAGS_COMMON = [
         "-O3",
         "-std=c++17",
         "-U__CUDA_NO_HALF_OPERATORS__",
         "-U__CUDA_NO_HALF_CONVERSIONS__",
         "--use_fast_math",
         f"--threads={os.cpu_count()}",
-        "-Xptxas=-v",
+        # "-Xptxas=-v",
         "-diag-suppress=174",
     ]
 
@@ -66,81 +67,40 @@ if not SKIP_CUDA_BUILD:
         CXX_FLAGS += cxx_append.split()
     nvcc_append = os.getenv("NVCC_APPEND_FLAGS", "").strip()
     if nvcc_append:
-        NVCC_FLAGS += nvcc_append.split()
+        NVCC_FLAGS_COMMON += nvcc_append.split()
 
     ABI = 1 if torch._C._GLIBCXX_USE_CXX11_ABI else 0
     CXX_FLAGS += [f"-D_GLIBCXX_USE_CXX11_ABI={ABI}"]
-    NVCC_FLAGS += [f"-D_GLIBCXX_USE_CXX11_ABI={ABI}"]
+    NVCC_FLAGS_COMMON += [f"-D_GLIBCXX_USE_CXX11_ABI={ABI}"]
 
     if CUDA_HOME is None:
         raise RuntimeError(
             "Cannot find CUDA_HOME. CUDA must be available to build the package."
         )
-
-    def get_nvcc_cuda_version(cuda_dir: str) -> Version:
-        """Get the CUDA version from nvcc.
-
-        Adapted from https://github.com/NVIDIA/apex/blob/8b7a1ff183741dd8f9b87e7bafd04cfde99cea28/setup.py
-        """
-
-        nvcc_output = subprocess.check_output(
-            [os.path.join(cuda_dir, "bin", "nvcc"), "-V"], universal_newlines=True
-        )
-        output = nvcc_output.split()
-        release_idx = output.index("release") + 1
-        nvcc_cuda_version = parse(output[release_idx].split(",")[0])
-        return nvcc_cuda_version
-
-    def normalize_arch(arch: str) -> Optional[str]:
-        """Normalize an architecture spec from TORCH_CUDA_ARCH_LIST."""
-
-        token = arch.strip()
-        if not token:
-            return None
-        cleaned = token.upper().replace("SM_", "").replace("COMPUTE_", "")
-        ptx = cleaned.endswith("+PTX")
-        if ptx:
-            cleaned = cleaned[:-4]
-        suffix = ""
-        if cleaned.endswith("A"):
-            suffix = "a"
-            cleaned = cleaned[:-1]
-        cleaned = cleaned.replace(" ", "")
-        if "." in cleaned:
-            major, _, minor = cleaned.partition(".")
-            if not (major.isdigit() and minor and minor[0].isdigit()):
-                warnings.warn(
-                    f"Invalid CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-                )
-                return None
-            base = f"{int(major)}.{minor[0]}"
-        else:
-            if len(cleaned) != 2 or not cleaned.isdigit():
-                warnings.warn(
-                    f"Invalid CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-                )
-                return None
-            base = f"{cleaned[0]}.{cleaned[1]}"
-        if base not in SUPPORTED_ARCHS:
-            warnings.warn(
-                f"Unsupported CUDA architecture '{arch}'. Supported architectures are {SUPPORTED_ARCHS}."
-            )
-            return None
-        capability = f"{base}{suffix}"
-        if ptx:
-            capability += "+PTX"
-        return capability
-
+    
     # Determine target compute capabilities.
     compute_capabilities = set()
 
     # Prefer TORCH_CUDA_ARCH_LIST if explicitly specified (works without GPUs).
-    arch_list_env = os.getenv("TORCH_CUDA_ARCH_LIST", "").strip()
-    if arch_list_env:
-        for item in arch_list_env.replace(",", ";").split(";"):
-            capability = normalize_arch(item)
-            if capability is not None:
-                compute_capabilities.add(capability)
+    PARSE_CUDA_ARCH_RE = re.compile(
+        r"(?P<major>[0-9]+)\.(?P<minor>[0-9])(?P<suffix>[a-zA-Z]{0,1})(?P<ptx>\+PTX){0,1}"
+    )
+    arch_list_env = os.environ.get("TORCH_CUDA_ARCH_LIST")
+    if arch_list_env is not None:
+        # Parse the CUDA architecture list from the environment variable.
+        for arch in arch_list_env.replace(" ", ";").split(";"):
+            match = PARSE_CUDA_ARCH_RE.match(arch)
+            if match is None:
+                warnings.warn(f"Invalid CUDA architecture {arch}. Supported architectures: {SUPPORTED_ARCHS}.")
+                continue
+            major = match.group("major")
+            minor = match.group("minor")
+            suffix = match.group("suffix") or ""
+            ptx = match.group("ptx") or ""
+            if f"{major}.{minor}" not in SUPPORTED_ARCHS:
+                warnings.warn(f"Unsupported CUDA architecture {arch}. Supported architectures: {SUPPORTED_ARCHS}.")
+                continue
+            compute_capabilities.add(f"{major}.{minor}{suffix}{ptx}")
 
     # If not provided, try to detect from local GPUs.
     if not compute_capabilities:
@@ -154,8 +114,6 @@ if not SKIP_CUDA_BUILD:
                 continue
             compute_capabilities.add(f"{major}.{minor}")
 
-    nvcc_cuda_version = get_nvcc_cuda_version(CUDA_HOME)
-
     if not compute_capabilities:
         raise RuntimeError(
             "No target compute capabilities. Set TORCH_CUDA_ARCH_LIST or build on a machine with GPUs."
@@ -163,7 +121,24 @@ if not SKIP_CUDA_BUILD:
     else:
         print(f"Target compute capabilities: {compute_capabilities}")
 
+
     # Validate the NVCC CUDA version.
+    def get_nvcc_cuda_version(cuda_dir: str) -> Version:
+        """Get the CUDA version from nvcc.
+
+        Adapted from https://github.com/NVIDIA/apex/blob/8b7a1ff183741dd8f9b87e7bafd04cfde99cea28/setup.py
+        """
+
+        nvcc_output = subprocess.check_output(
+            [os.path.join(cuda_dir, "bin", "nvcc"), "-V"], universal_newlines=True
+        )
+        output = nvcc_output.split()
+        release_idx = output.index("release") + 1
+        nvcc_cuda_version = parse(output[release_idx].split(",")[0])
+        return nvcc_cuda_version
+    
+    nvcc_cuda_version = get_nvcc_cuda_version(CUDA_HOME)
+
     if nvcc_cuda_version < Version("12.0"):
         raise RuntimeError("CUDA 12.0 or higher is required to build the package.")
     if nvcc_cuda_version < Version("12.4") and any(
@@ -185,34 +160,29 @@ if not SKIP_CUDA_BUILD:
             "CUDA 12.8 or higher is required for compute capability 12.0."
         )
 
-    # Add target compute capabilities to NVCC flags.
-    for capability in compute_capabilities:
-        if capability.startswith("8.0"):
-            HAS_SM80 = True
-            num = "80"
-        elif capability.startswith("8.6"):
-            HAS_SM86 = True
-            num = "86"
-        elif capability.startswith("8.9"):
-            HAS_SM89 = True
-            num = "89"
-        elif capability.startswith("9.0"):
-            HAS_SM90 = True
-            num = "90a"
-        elif capability.startswith("10.0"):
-            HAS_SM100 = True
-            num = "100a"
-        elif capability.startswith("12.0"):
-            HAS_SM120 = True
-            num = "120a"
-        else:
-            continue
-        NVCC_FLAGS += ["-gencode", f"arch=compute_{num},code=sm_{num}"]
-        if capability.endswith("+PTX"):
-            NVCC_FLAGS += ["-gencode", f"arch=compute_{num},code=compute_{num}"]
+
+    def has_capability(target):
+            return any(cc.startswith(target) for cc in compute_capabilities)
+
+    def get_nvcc_flags(allowed_capabilities):
+        NVCC_FLAGS = []
+        # Add target compute capabilities to NVCC flags.
+        for capability in compute_capabilities:
+            if capability not in allowed_capabilities:
+                continue
+            num = capability.split("+")[0].replace(".", "")
+            if num in {"90", "100", "120"}:
+                # need to use sm90a instead of sm90 to use wgmma ptx instruction.
+                # need to use sm120a to use mxfp8/mxfp4/nvfp4 instructions.
+                num += "a"
+            NVCC_FLAGS += ["-gencode", f"arch=compute_{num},code=sm_{num}"]
+            if capability.endswith("+PTX"):
+                NVCC_FLAGS += ["-gencode", f"arch=compute_{num},code=compute_{num}"]
+        NVCC_FLAGS += NVCC_FLAGS_COMMON
+        return NVCC_FLAGS
 
     # Fused kernels and QAttn variants.
-    if HAS_SM80 or HAS_SM86 or HAS_SM89 or HAS_SM90 or HAS_SM100 or HAS_SM120:
+    if has_capability(("8.0", "8.6", "8.9", "9.0", "10.0", "12.0")):
         ext_modules.append(
             CUDAExtension(
                 name="sageattention._qattn_sm80",
@@ -220,11 +190,11 @@ if not SKIP_CUDA_BUILD:
                     "csrc/qattn/pybind_sm80.cpp",
                     "csrc/qattn/qk_int_sv_f16_cuda_sm80.cu",
                 ],
-                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": NVCC_FLAGS},
+                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": get_nvcc_flags(["8.0", "8.6", "8.9", "9.0", "10.0", "12.0"])},
             )
         )
 
-    if HAS_SM89 or HAS_SM90 or HAS_SM100 or HAS_SM120:
+    if has_capability(("8.9", "9.0", "10.0", "12.0")):
         ext_modules.append(
             CUDAExtension(
                 name="sageattention._qattn_sm89",
@@ -238,11 +208,11 @@ if not SKIP_CUDA_BUILD:
                     "csrc/qattn/sm89_qk_int8_sv_f8_accum_f32_fuse_v_scale_attn_inst_buf.cu",
                     "csrc/qattn/sm89_qk_int8_sv_f8_accum_f16_fuse_v_scale_attn_inst_buf.cu",
                 ],
-                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": NVCC_FLAGS},
+                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": get_nvcc_flags(["8.9", "9.0", "10.0", "12.0"])},
             )
         )
 
-    if HAS_SM90:
+    if has_capability(("9.0",)):
         ext_modules.append(
             CUDAExtension(
                 name="sageattention._qattn_sm90",
@@ -250,7 +220,7 @@ if not SKIP_CUDA_BUILD:
                     "csrc/qattn/pybind_sm90.cpp",
                     "csrc/qattn/qk_int_sv_f8_cuda_sm90.cu",
                 ],
-                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": NVCC_FLAGS},
+                extra_compile_args={"cxx": CXX_FLAGS, "nvcc": get_nvcc_flags(["9.0"])},
                 extra_link_args=['-lcuda'],
             )
         )
@@ -259,7 +229,7 @@ if not SKIP_CUDA_BUILD:
         CUDAExtension(
             name="sageattention._fused",
             sources=["csrc/fused/pybind.cpp", "csrc/fused/fused.cu"],
-            extra_compile_args={"cxx": CXX_FLAGS, "nvcc": NVCC_FLAGS},
+            extra_compile_args={"cxx": CXX_FLAGS, "nvcc": get_nvcc_flags(SUPPORTED_ARCHS)},
         )
     )
 
