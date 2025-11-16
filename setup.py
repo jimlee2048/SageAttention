@@ -168,7 +168,7 @@ if not SKIP_CUDA_BUILD:
         NVCC_FLAGS = []
         # Add target compute capabilities to NVCC flags.
         for capability in compute_capabilities:
-            if capability not in allowed_capabilities:
+            if not any(capability.startswith(prefix) for prefix in allowed_capabilities):
                 continue
             num = capability.split("+")[0].replace(".", "")
             if num in {"90", "100", "120"}:
