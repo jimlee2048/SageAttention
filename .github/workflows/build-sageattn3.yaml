@@ -44,6 +44,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Prepare csrc dependencies
+        working-directory: sageattention3_blackwell
+        run: |
+          mkdir -p csrc
+          CUTLASS_DIR="csrc/cutlass"
+          if [ -d "$CUTLASS_DIR" ]; then
+            echo "Cutlass already prepared at $CUTLASS_DIR"
+          else
+            git clone --depth 1 https://github.com/NVIDIA/cutlass.git "$CUTLASS_DIR"
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_BUILDER_VERSION }}
@@ -53,6 +64,8 @@ jobs:
         with:
           cuda: ${{ fromJSON(env.CUDA_VERSION_MAP)[matrix.cuda] }}
           log-file-suffix: sageattn3-torch${{ matrix.torch }}-${{ matrix.cuda }}
+          use-local-cache: false
+          use-github-cache: false
 
       - name: Check current PyTorch version
         id: check-torch-version
@@ -117,7 +130,7 @@ jobs:
         env:
           CUDA_PATH: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
         run: |
-          export MAX_JOBS=2
+          export MAX_JOBS=1
           export EXT_PARALLEL=1
           export CUDA_HOME=$CUDA_PATH
           export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LD_LIBRARY_PATH
