@@ -124,6 +124,7 @@ jobs:
           fi
 
           python -m pip install -U build ninja wheel setuptools einops
+          python -m pip cache purge
 
       - name: Build wheel
         working-directory: sageattention3_blackwell
@@ -135,7 +136,37 @@ jobs:
           export CUDA_HOME=$CUDA_PATH
           export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LD_LIBRARY_PATH
           export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LIBRARY_PATH
-          python -m build --wheel --no-isolation
+          report_resources () {
+            echo "---- $(date) Resource usage ----"
+            free -h
+            echo "---- Disk usage ----"
+            df -h
+          }
+
+          echo "Resource snapshot before build"
+          report_resources
+
+          python -m build --wheel --no-isolation &
+          BUILD_PID=$!
+
+          (
+            while kill -0 "$BUILD_PID" 2>/dev/null; do
+              echo "Resource snapshot during build"
+              report_resources
+              sleep 30
+            done
+          ) &
+          MONITOR_PID=$!
+
+          wait "$BUILD_PID"
+          BUILD_STATUS=$?
+
+          wait "$MONITOR_PID" 2>/dev/null || true
+
+          echo "Resource snapshot after build"
+          report_resources
+
+          exit $BUILD_STATUS
 
       - name: Rename wheel with version info
         working-directory: sageattention3_blackwell/dist
