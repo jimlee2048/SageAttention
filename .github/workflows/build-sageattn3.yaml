@@ -40,6 +40,7 @@ jobs:
           remove-dotnet: "true"
           remove-haskell: "true"
           remove-codeql: "true"
+          swap-size-mb: 16384
 
       - name: Checkout code
         uses: actions/checkout@v4
