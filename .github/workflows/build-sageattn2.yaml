@@ -60,6 +60,8 @@ jobs:
         with:
           cuda: ${{ fromJSON(env.CUDA_VERSION_MAP)[matrix.cuda] }}
           log-file-suffix: sageattention-torch${{ matrix.torch }}-${{ matrix.cuda }}-${{ env.PY_LIMITED_API_TAG }}-abi3
+          use-local-cache: false
+          use-github-cache: false
 
       - name: Check current PyTorch version
         id: check-torch-version
@@ -123,6 +125,7 @@ jobs:
           fi
 
           python -m pip install -U build ninja "setuptools>=62,<75" "wheel>=0.38,<0.44" "packaging>=21,<24"
+          python -m pip cache purge
 
       - name: Build wheel
         env:

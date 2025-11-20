@@ -46,7 +46,7 @@ def check_if_cuda_home_none(global_option: str) -> None:
 
 
 def append_nvcc_threads(nvcc_extra_args):
-    return nvcc_extra_args + ["--threads", str(os.cpu_count())]
+    return nvcc_extra_args + ["--threads", "1"]
 
 
 cmdclass = {}

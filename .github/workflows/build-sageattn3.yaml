@@ -40,6 +40,7 @@ jobs:
           remove-dotnet: "true"
           remove-haskell: "true"
           remove-codeql: "true"
+          swap-size-mb: 16384
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -53,6 +54,8 @@ jobs:
         with:
           cuda: ${{ fromJSON(env.CUDA_VERSION_MAP)[matrix.cuda] }}
           log-file-suffix: sageattn3-torch${{ matrix.torch }}-${{ matrix.cuda }}
+          use-local-cache: false
+          use-github-cache: false
 
       - name: Check current PyTorch version
         id: check-torch-version
@@ -111,13 +114,14 @@ jobs:
           fi
 
           python -m pip install -U build ninja wheel setuptools einops
+          python -m pip cache purge
 
       - name: Build wheel
         working-directory: sageattention3_blackwell
         env:
           CUDA_PATH: ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}
         run: |
-          export MAX_JOBS=2
+          export MAX_JOBS=1
           export EXT_PARALLEL=1
           export CUDA_HOME=$CUDA_PATH
           export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/lib64/stubs:$LD_LIBRARY_PATH
