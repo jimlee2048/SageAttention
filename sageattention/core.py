@@ -151,6 +151,8 @@ def sageattn(
         return sageattn_qk_int8_pv_fp8_cuda_sm90(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp32")
     elif arch == "sm120":
         return sageattn_qk_int8_pv_fp8_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, qk_quant_gran="per_warp", sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp16") # sm120 has accurate fp32 accumulator for fp8 mma and triton kernel is currently not usable on sm120.
+    elif arch == "sm121":
+        return sageattn_qk_int8_pv_fp8_cuda(q, k, v, tensor_layout=tensor_layout, is_causal=is_causal, qk_quant_gran="per_warp", sm_scale=sm_scale, return_lse=return_lse, pv_accum_dtype="fp32+fp16") # sm121 has accurate fp32 accumulator for fp8 mma and triton kernel is currently not usable on sm121.
     else:
         raise ValueError(f"Unsupported CUDA architecture: {arch}")
 
@@ -272,12 +274,12 @@ def sageattn_qk_int8_pv_fp16_triton(
     assert q.stride(-1) == 1 and k.stride(-1) == 1 and v.stride(-1) == 1, "Last dim of qkv must be contiguous."
 
     seq_dim = 1 if tensor_layout == "NHD" else 2
-    nh_dim = 2 if tensor_layout == 0 else 1
+    nh_dim = 2 if tensor_layout == "NHD" else 1
 
     if smooth_k:
         km = k.mean(dim=seq_dim, keepdim=True)
-        nqheads = q.size(2)
-        nkheads = k.size(2)
+        nqheads = q.size(nh_dim)
+        nkheads = k.size(nh_dim)
         q_per_kv_heads = nqheads // nkheads
         if q_per_kv_heads > 1:
             # nheads_k => nheads_q
@@ -580,8 +582,8 @@ def sageattn_qk_int8_pv_fp16_cuda(
 
     if smooth_k:
         km = k.mean(dim=seq_dim, keepdim=True)
-        nqheads = q.size(2)
-        nkheads = k.size(2)
+        nqheads = q.size(nh_dim)
+        nkheads = k.size(nh_dim)
         q_per_kv_heads = nqheads // nkheads
         if q_per_kv_heads > 1:
             # nheads_k => nheads_q
@@ -769,8 +771,8 @@ def sageattn_qk_int8_pv_fp8_cuda(
 
     if smooth_k:
         km = k.mean(dim=seq_dim, keepdim=True)
-        nqheads = q.size(2)
-        nkheads = k.size(2)
+        nqheads = q.size(nh_dim)
+        nkheads = k.size(nh_dim)
         q_per_kv_heads = nqheads // nkheads
         if q_per_kv_heads > 1:
             # nheads_k => nheads_q
@@ -945,8 +947,8 @@ def sageattn_qk_int8_pv_fp8_cuda_sm90(
 
     if smooth_k:
         km = k.mean(dim=seq_dim, keepdim=True)
-        nqheads = q.size(2)
-        nkheads = k.size(2)
+        nqheads = q.size(nh_dim)
+        nkheads = k.size(nh_dim)
         q_per_kv_heads = nqheads // nkheads
         if q_per_kv_heads > 1:
             # nheads_k => nheads_q

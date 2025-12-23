@@ -44,9 +44,10 @@ if not SKIP_CUDA_BUILD:
     HAS_SM90 = False
     HAS_SM100 = False
     HAS_SM120 = False
+    HAS_SM121 = False
 
-    # Supported NVIDIA GPU architectures; keep in sync with build-wheel.yaml.
-    SUPPORTED_ARCHS = {"8.0", "8.6", "8.9", "9.0", "10.0", "12.0"}
+    # Supported NVIDIA GPU architectures.
+    SUPPORTED_ARCHS = {"8.0", "8.6", "8.9", "9.0", "10.0", "12.0", "12.1"}
 
     # Compiler flags.
     CXX_FLAGS = ["-g", "-O3", "-fopenmp", "-lgomp", "-std=c++17", "-DENABLE_BF16"]
@@ -171,7 +172,7 @@ if not SKIP_CUDA_BUILD:
             if not any(capability.startswith(prefix) for prefix in allowed_capabilities):
                 continue
             num = capability.split("+")[0].replace(".", "")
-            if num in {"90", "100", "120"}:
+            if num in {"90", "100", "120", "121"}:
                 # need to use sm90a instead of sm90 to use wgmma ptx instruction.
                 # need to use sm120a to use mxfp8/mxfp4/nvfp4 instructions.
                 num += "a"
@@ -182,7 +183,7 @@ if not SKIP_CUDA_BUILD:
         return NVCC_FLAGS
 
     # Fused kernels and QAttn variants.
-    if has_capability(("8.0", "8.6", "8.9", "9.0", "10.0", "12.0")):
+    if has_capability(("8.0", "8.6", "8.9", "9.0", "10.0", "12.0", "12.1")):
         ext_modules.append(
             CUDAExtension(
                 name="sageattention._qattn_sm80",
@@ -194,7 +195,7 @@ if not SKIP_CUDA_BUILD:
             )
         )
 
-    if has_capability(("8.9", "9.0", "10.0", "12.0")):
+    if has_capability(("8.9", "9.0", "10.0", "12.0", "12.1")):
         ext_modules.append(
             CUDAExtension(
                 name="sageattention._qattn_sm89",

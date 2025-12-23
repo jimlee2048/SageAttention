@@ -5,16 +5,16 @@
 This repository provides the official implementation of SageAttention, SageAttention2, and SageAttention2++, which achieve surprising speedup on most GPUs without lossing accuracy across all models in a plug-and-play way.
 
 **SageAttention: Accurate 8-Bit Attention for Plug-and-play Inference Acceleration**  
-Jintao Zhang, Jia Wei, Haofeng Huang, Pengle Zhang, Jun Zhu, Jianfei Chen  
-Paper: https://arxiv.org/abs/2410.02367  
+Jintao Zhang, Jia Wei, Haofeng Huang, Pengle Zhang, Jun Zhu, Jianfei Chen
+Paper: https://arxiv.org/abs/2410.02367
 
 **SageAttention2: Efficient Attention with Thorough Outlier Smoothing and Per-thread INT4 Quantization**  
-Jintao Zhang, Haofeng Huang, Pengle Zhang, Jia Wei, Jun Zhu, Jianfei Chen  
-Paper: https://arxiv.org/abs/2411.10958  
+Jintao Zhang, Haofeng Huang, Pengle Zhang, Jia Wei, Jun Zhu, Jianfei Chen
+Paper: https://arxiv.org/abs/2411.10958
 
 **SageAttention3: Microscaling FP4 Attention for Inference and An Exploration of 8-Bit Training**  
-Jintao Zhang, Jia Wei, Haoxu Wang, Pengle Zhang, Xiaoming Xu, Haofeng Huang, Kai Jiang, Jun Zhu, Jianfei Chen  
-Paper: https://arxiv.org/abs/2505.11594  
+Jintao Zhang, Jia Wei, Haoxu Wang, Pengle Zhang, Xiaoming Xu, Haofeng Huang, Kai Jiang, Jun Zhu, Jianfei Chen
+Paper: https://arxiv.org/abs/2505.11594
 
 
 ![Local Image](./assets/2.png)
@@ -125,7 +125,7 @@ Support for different sequence lengths between `q` and `k,v` and `group-query at
 ### Plug-and-play Example
 
 We can replace `scaled_dot_product_attention` easily. 
-We will take [CogvideoX](https://huggingface.co/THUDM/CogVideoX-2b) as an example:
+We will take [CogvideoX](https://huggingface.co/zai-org/CogVideoX-2b) as an example:
 
 Add the following codes and run
 ```diff
@@ -140,12 +140,12 @@ Specifically,
 
 ```bash
 cd example
-python cogvideox-2b.py --compile --attention_type sage
+python cogvideox_infer.py --model cogvideox-2b --compile --attention_type sage
 ```
 
-**You can get a lossless video in** `./example` **faster than by using** `python cogvideox-2b.py --compile`. More examples and guidance can be found under the `example/` directory.
+**You can get a lossless video in** `./example/videos/<model>/<attention_type>/` **faster than by using** `--attention_type sdpa`. More examples and guidance can be found under the `example/` directory.
 
-> **Note:** Not all models works with `F.scaled_dot_product_attention = sageattn`. Technically, you should replace the original Attention by modifying the `Attention Class` of the target model. For image and video models, we suggest only replacing the attention in DiT (see `example/mochi.py` for detail).
+> **Note:** Not all models works with `F.scaled_dot_product_attention = sageattn`. Technically, you should replace the original Attention by modifying the `Attention Class` of the target model. For image and video models, we suggest only replacing the attention in DiT (see `example/modify_mochi.py` for detail).
 
 ### Kernel Benchmarking
 We provide a benchmarking script to compare the speed of different kernels including SageAttention, FlashAttention2 and FlashAttention3. Please refer to the `benchmark/` directory for more details.

@@ -22,7 +22,7 @@ SKIP_CUDA_BUILD = os.getenv("FAHOPPER_SKIP_CUDA_BUILD", "FALSE") == "TRUE"
 FORCE_CXX11_ABI = os.getenv("FAHOPPER_FORCE_CXX11_ABI", "FALSE") == "TRUE"
 
 # Supported NVIDIA GPU architectures; keep in sync with workflows.
-SUPPORTED_ARCHS = {"10.0", "12.0"}
+SUPPORTED_ARCHS = {"10.0", "12.0", "12.1"}
 
 def get_cuda_bare_metal_version(cuda_dir):
     raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"], universal_newlines=True)
@@ -118,7 +118,7 @@ if not SKIP_CUDA_BUILD:
             if not any(capability.startswith(prefix) for prefix in allowed_capabilities):
                 continue
             num = capability.split("+")[0].replace(".", "")
-            if num in {"100", "120"}:
+            if num in {"100", "120", "121"}:
                 num += "a"
             flags += ["-gencode", f"arch=compute_{num},code=sm_{num}"]
             if capability.endswith("+PTX"):
@@ -129,6 +129,8 @@ if not SKIP_CUDA_BUILD:
         cc_flag += get_nvcc_flags(["10.0"])
     if has_capability(("12.0",)):
         cc_flag += get_nvcc_flags(["12.0"])
+    if has_capability(("12.1",)):
+        cc_flag += get_nvcc_flags(["12.1"])
 
     # HACK: The compiler flag -D_GLIBCXX_USE_CXX11_ABI is set to be the same as
     # torch._C._GLIBCXX_USE_CXX11_ABI
