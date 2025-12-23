@@ -19,15 +19,15 @@ jobs:
       PYTHON_BUILDER_VERSION: "3.13"
       CUDA_VERSION_MAP: >-
         {
-          "cu129": "12.9.1",
+          "cu128": "12.8.1",
           "cu130": "13.0.2"
         }
     strategy:
       matrix:
         include:
-          # torch2.8+cu129
+          # torch2.8+cu128
           - torch: "2.8"
-            cuda: "cu129"
+            cuda: "cu128"
           # torch2.9+cu130
           - torch: "2.9"
             cuda: "cu130"
@@ -98,7 +98,7 @@ jobs:
             echo "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/${{ matrix.cuda }}" >> $GITHUB_ENV
           fi
 
-          echo "TORCH_CUDA_ARCH_LIST=10.0;12.0" >> $GITHUB_ENV
+          echo "TORCH_CUDA_ARCH_LIST=10.0;12.0;12.1" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
