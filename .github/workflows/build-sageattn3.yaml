@@ -101,7 +101,12 @@ jobs:
             echo "PYTORCH_INDEX_URL=https://download.pytorch.org/whl/${{ matrix.cuda }}" >> $GITHUB_ENV
           fi
 
-          echo "TORCH_CUDA_ARCH_LIST=10.0;12.0;12.1" >> $GITHUB_ENV
+          CUDA_VERSION_NUM=$(echo "${{ matrix.cuda }}" | tr -d 'cu')
+          if [ "$CUDA_VERSION_NUM" -ge "130" ]; then
+            echo "TORCH_CUDA_ARCH_LIST=10.0;12.0;12.1" >> $GITHUB_ENV
+          else
+            echo "TORCH_CUDA_ARCH_LIST=10.0;12.0" >> $GITHUB_ENV
+          fi
 
       - name: Install dependencies
         run: |
