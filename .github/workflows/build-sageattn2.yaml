@@ -37,6 +37,9 @@ jobs:
           # torch2.9+cu130
           - torch: "2.9"
             cuda: "cu130"
+          # torch2.10+cu130
+          - torch: "2.10"
+            cuda: "cu130"
     steps:
       - name: Maximize build disk space
         uses: easimon/maximize-build-space@master
